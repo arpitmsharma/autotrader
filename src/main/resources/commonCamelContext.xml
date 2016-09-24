@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:camel="http://camel.apache.org/schema/spring" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+       http://camel.apache.org/schema/spring http://camel.apache.org/schema/spring/camel-spring.xsd">
+
+	<!-- Need to Create Bean For each currecney Pair -->
+	<bean id="priceMatcherEURUSD" class="com.fm.fixconnector.algo.PriceMatcher">
+		<property name="orderGateway" ref="orderGateway" />
+		<property name="messageControllerSource1" ref="nordeaAppOrderController" />
+		<property name="messageControllerSource2" ref="sebAppOrderController" />
+		<property name="orderTestMailSender" ref="orderTestMailSender"></property>
+	</bean>
+	<bean id="orderGateway" class="com.fm.fixconnector.algo.OrderGateway"></bean>
+	<import resource="nordeabeans.xml" />
+	<import resource="sebbeans.xml" />
+
+	<!-- Event Notifier -->
+	<bean id="auditEventNotifier" class="com.fm.fixconnector.util.AuditEventNotifier">
+	</bean>
+	<bean id="randomNumberGen" class="com.fm.fixconnector.util.RandomNumberGenerator" ></bean>
+
+	<!-- OrderTest MailSender -->
+	<bean id="orderTestMailSender" class="com.fm.fixconnector.util.OrderTestMailSender">
+		<property name="mailSender" ref="mailSender"></property>
+		<property name="mailFrom" value="manu.arpit01@gmail.com"></property>
+		<property name="velocityEngine" ref="velocityEngine"></property>
+		<property name="templateLoc" value="/com/fm/fixconnector/util/order.vm">
+		</property>
+	</bean>
+	<bean id="velocityEngine"
+		class="org.springframework.ui.velocity.VelocityEngineFactoryBean">
+		<property name="velocityProperties">
+			<value>
+				resource.loader=class
+				class.resource.loader.class=org.apache.velocity.runtime.resource.loader.ClasspathResourceLoader
+				runtime.log.logsystem.class=org.apache.velocity.runtime.log.NullLogSystem
+			</value>
+		</property>
+	</bean>
+	<bean id="mailSender" class="org.springframework.mail.javamail.JavaMailSenderImpl">
+		<property name="host" value="smtp.gmail.com" />
+		<property name="port" value="587" />
+		<property name="username" value="manu.arpit01@gmail.com" />
+		<property name="password" value="BLACKjack!21" />
+		<property name="javaMailProperties">
+			<props>
+				<prop key="mail.smtp.auth">true</prop>
+				<prop key="mail.smtp.starttls.enable">true</prop>
+			</props>
+		</property>
+	</bean>
+	
+	<!-- JMX Config -->
+	<bean id="htmlAdaptor" class="com.sun.jdmk.comm.HtmlAdaptorServer"
+		init-method="start">
+		<property name="port" value="8001" />
+	</bean>
+	<!-- <bean id="threadBean" class="java.lang.management.ManagementFactory" 
+		factory-method="getThreadMXBean"/> -->
+	<bean id="exporter" class="org.springframework.jmx.export.MBeanExporter"
+		lazy-init="false">
+		<property name="beans">
+			<map>
+				<entry key="adaptor:name=htmlAdaptor" value-ref="htmlAdaptor" />
+				
+				<entry key="priceMatcherEURUSD" value-ref="priceMatcherEURUSD"/> 
+			</map>
+		</property>
+		<!-- <property name="autodetect" value="true" /> -->
+		<property name="namingStrategy" ref="namingStrategy" />
+		<property name="assembler" ref="assembler" />
+		<property name="server">
+			<bean id="MBeanServer" class="java.lang.management.ManagementFactory"
+				factory-method="getPlatformMBeanServer" />
+
+		</property>
+	</bean>
+
+	<bean id="jmxAttributeSource"
+		class="org.springframework.jmx.export.annotation.AnnotationJmxAttributeSource" />
+
+	<bean id="assembler"
+		class="org.springframework.jmx.export.assembler.MetadataMBeanInfoAssembler">
+		<property name="attributeSource" ref="jmxAttributeSource" />
+	</bean>
+
+	<bean id="namingStrategy"
+		class="org.springframework.jmx.export.naming.MetadataNamingStrategy">
+		<property name="attributeSource" ref="jmxAttributeSource" />
+	</bean>
+
+
+	<bean id="tradeCaptureMailSender" class="com.fm.fixconnector.util.MailSender">
+		<property name="mailFrom" value="manu.arpit01@gmail.com"></property>
+		<property name="mailSender" ref="mailSender"></property>
+		<property name="velocityEngine" ref="velocityEngine"></property>
+		<property name="templateLoc" value="/com/fm/fixconnector/util/temp.vm">
+		</property>
+	</bean>
+</beans>

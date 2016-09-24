@@ -1,0 +1,342 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camel="http://camel.apache.org/schema/spring"
+	xmlns:util="http://www.springframework.org/schema/util" xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+http://camel.apache.org/schema/spring http://camel.apache.org/schema/spring/camel-spring.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util-2.5.xsd
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+
+	<context:property-placeholder location="classpath:connection.properties" />
+
+	<camelContext id="quickfixjContext" xmlns="http://camel.apache.org/schema/spring">
+		<route>
+			<from uri="quickfix:incoming" />
+			<choice>
+				<when>
+					<simple>${in.header.EventCategory} == 'AppMessageReceived'</simple>
+					<choice>
+						<when>
+							<simple>${in.header.MessageType} == 'BF'</simple>
+							<!-- <bean ref="priceFixMessageController" method="sendPriceRequestMessage(${ref:BUSD_SEKPriceRequestMap})"/> 
+								<bean ref="priceFixMessageController" method="sendPriceRequestMessage(${ref:OUSD_SEKPriceRequestMap})"/> -->
+							<bean ref="priceFixMessageController"
+								method="sendPriceRequestMessage(${ref:BEUR_USDPriceRequestMap})" />
+							<bean ref="priceFixMessageController"
+								method="sendPriceRequestMessage(${ref:OEUR_USDPriceRequestMap})" />
+							<!-- <bean ref="priceFixMessageController" method="sendPriceRequestMessage(${ref:BEUR_SEKPriceRequestMap})"/> 
+								<bean ref="priceFixMessageController" method="sendPriceRequestMessage(${ref:OEUR_SEKPriceRequestMap})"/> -->
+						</when>
+						<when>
+							<description>&lt;bean ref="priceMessageConsumer" method="consumeMessage"/&gt;</description>
+							<simple>${in.header.MessageType} == 'X' || ${in.header.MessageType} == 'W'</simple>
+							<unmarshal ref="bindyDataformat">
+								<bindy type="KeyValue" classType="com.fm.fixconnector.nordea.MarketData"
+									locale="en-us" />
+							</unmarshal>
+							<log message="Message for Symbol from Nordea  ${body.symbol}"
+								loggingLevel="INFO" />
+							<bean ref="priceMatcherEURUSD" method="onMessageFromSource1" />
+							<!-- <when> <simple>${body.symbol} == 'EUR/USD'</simple> <log message="Message 
+								for Symbol from Nordea ${body.symbol}" loggingLevel="INFO"/> <bean ref="priceMatcherEURUSD" 
+								method="onMessageFromSource1"/> </when> -->
+                        <!-- <bean ref="tradeMessageRepo" method="setQuoteId"> <description>Just 
+								added for testing</description> </bean> -->
+						</when>
+					</choice>
+				</when>
+				<when>
+					<simple>${in.header.EventCategory} == 'SessionLogon'</simple>
+					<bean ref="priceFixMessageController" method="sendUserRequestMessage(${ref:loginRequestMap})" />
+				</when>
+			</choice>
+		</route>
+		<route id="out">
+			<from uri="quickfix:outgoing" />
+			<choice>
+				<when>
+					<simple>${in.header.EventCategory} == 'SessionLogon'</simple>
+					<bean ref="tradeFixMessageController" method="sendUserRequestMessage(${ref:loginRequestMap})" />
+				</when>
+				<when>
+					<simple>${in.header.MessageType} == '8'</simple>
+					<unmarshal ref="bindyDataformat">
+						<bindy type="KeyValue"
+							classType="com.fm.fixconnector.nordea.ExecutionReportNORDEA"
+							locale="en-us" />
+					</unmarshal>
+					<log message="Trade Report for order ::: ${body}" loggingLevel="INFO" />
+					<bean ref="tradeReportConsumer" method="consumeMessage" />
+				</when>
+			</choice>
+		</route>
+		<route id="OrderRoute">
+			<from uri="direct:nordeaorder" />
+			<bean ref="randomNumberGen" method="assignNo(${ref:orderRequestMapNordea})" />
+			<bean ref="tradeMessageRepo"
+				method="getOrderMessage(${ref:orderRequestMapNordea},${in.body})" />
+			<bean ref="tradeFixMessageController" method="sendMessage" />
+		</route>
+	</camelContext>
+
+	<util:map id="loginRequestMap" key-type="java.lang.Integer"
+		value-type="java.lang.String">
+		<entry key="553" value="${USERNAME}" />
+		<entry key="554" value="${PASSWORD}" />
+		<entry key="924" value="1" />
+	</util:map>
+
+	<util:map id="OUSD_SEKPriceRequestMap" key-type="java.lang.Integer"
+		value-type="java.lang.String">
+		<entry key="553" value="${USERNAME}" />
+		<entry key="55" value="USD/SEK" />
+		<entry key="15" value="USD" />
+		<entry key="64" value="SPOT" />
+		<entry key="269" value="0,1" />
+		<entry key="263" value="1" />
+		<entry key="265" value="0" />
+		<entry key="264" value="0" />
+	</util:map>
+	<util:map id="BUSD_SEKPriceRequestMap" key-type="java.lang.Integer"
+		value-type="java.lang.String">
+		<entry key="553" value="${USERNAME}" />
+		<entry key="55" value="USD/SEK" />
+		<entry key="15" value="SEK" />
+		<entry key="64" value="1D" />
+		<entry key="269" value="0,1" />
+		<entry key="263" value="1" />
+		<entry key="265" value="0" />
+		<entry key="264" value="0" />
+	</util:map>
+	<util:map id="OEUR_USDPriceRequestMap" key-type="java.lang.Integer"
+		value-type="java.lang.String">
+		<entry key="553" value="${USERNAME}" />
+		<entry key="55" value="EUR/USD" />
+		<entry key="15" value="SEK" />
+		<entry key="64" value="SPOT" />
+		<entry key="269" value="0,1" />
+		<entry key="263" value="1" />
+		<entry key="265" value="0" />
+		<entry key="264" value="0" />
+	</util:map>
+	<util:map id="BEUR_USDPriceRequestMap" key-type="java.lang.Integer"
+		value-type="java.lang.String">
+		<entry key="553" value="${USERNAME}" />
+		<entry key="55" value="EUR/USD" />
+		<entry key="15" value="USD" />
+		<entry key="64" value="SPOT" />
+		<entry key="269" value="1,0" />
+		<entry key="263" value="1" />
+		<entry key="265" value="0" />
+		<entry key="264" value="0" />
+	</util:map>
+	<util:map id="OEUR_SEKPriceRequestMap" key-type="java.lang.Integer"
+		value-type="java.lang.String">
+		<entry key="553" value="${USERNAME}" />
+		<entry key="55" value="EUR/SEK" />
+		<entry key="15" value="SEK" />
+		<entry key="64" value="SPOT" />
+		<entry key="269" value="0,1" />
+		<entry key="263" value="1" />
+		<entry key="265" value="0" />
+		<entry key="264" value="0" />
+	</util:map>
+	<util:map id="BEUR_SEKPriceRequestMap" key-type="java.lang.Integer"
+		value-type="java.lang.String">
+		<entry key="553" value="${USERNAME}" />
+		<entry key="55" value="EUR/SEK" />
+		<entry key="15" value="SEK" />
+		<entry key="64" value="SPOT" />
+		<entry key="269" value="1,0" />
+		<entry key="263" value="1" />
+		<entry key="265" value="0" />
+		<entry key="264" value="0" />
+	</util:map>
+	<util:map id="orderRequestMapNordea" key-type="java.lang.String"
+		value-type="java.lang.String">
+		<entry key="553" value="FIX2D65" />
+		<entry key="554" value="Cxw83jbr" />
+		<entry key="64" value="SPOT" />
+		<entry key="117" value="1,0" />
+		<entry key="40" value="1" />
+		<entry key="54" value="0" />
+		<entry key="38" value="1000" />
+		<entry key="6950" value="0" />
+		<entry key="263" value="1" />
+		<entry key="265" value="0" />
+		<entry key="264" value="0" />
+		<entry key="269" value="0" />
+		<entry key="262" value="0" />
+		<entry key="924" value="1" />
+		
+	</util:map>
+
+
+	<bean id="priceMessageConsumer" class="com.fm.fixconnector.MessageConsumer">
+		<property name="queue" ref="priceQueue" />
+	</bean>
+
+	<bean id="tradeReportConsumer" class="com.fm.fixconnector.MessageConsumer">
+		<property name="queue" ref="tradeCaptureQueue" />
+	</bean>
+
+
+	<!-- <bean id="priceMessageSocketServer" class="com.fm.fixconnector.socket.SocketServerHandler" 
+		init-method="init" > <property name="queue" ref="priceQueue"/> <property 
+		name="publisherPort" value="7789"/> </bean> -->
+
+	<bean id="orderMessageSocketServer" class="com.fm.fixconnector.socket.SocketServerHandler"
+		init-method="init">
+		<property name="queue" ref="orderQueue" />
+		<property name="publisherPort" value="7790" />
+		<property name="publisherServer" value="false" />
+	</bean>
+
+	<bean id="priceFixMessageController" class="com.fm.fixconnector.FixMessageController"
+		init-method="init">
+		<property name="messageRepo" ref="priceMessageRepo" />
+		<property name="senderCompId" value="${PSENDERCOMPID}" />
+		<property name="targetCompId" value="${PTARGETCOMPID}" />
+		<property name="messageVersion" value="${FIXMESSAGETYPE}" />
+		<property name="contextUri" value="quickfixjContext" />
+		<property name="gatewayUri" value="quickfix:incoming" />
+	</bean>
+
+	<bean id="tradeFixMessageController" class="com.fm.fixconnector.FixMessageController"
+		init-method="init">
+		<property name="messageRepo" ref="tradeMessageRepo" />
+		<property name="senderCompId" value="${TSENDERCOMPID}" />
+		<property name="targetCompId" value="${TTARGETCOMPID}" />
+		<property name="messageVersion" value="${FIXMESSAGETYPE}" />
+		<property name="contextUri" value="quickfixjContext" />
+		<property name="gatewayUri" value="quickfix:outgoing" />
+	</bean>
+
+
+	<bean id="directController" class="com.fm.fixconnector.MessageController"
+		init-method="init">
+		<property name="gatewayUri" value="direct:start"></property>
+		<property name="contextUri" value="quickfixjContext"></property>
+	</bean>
+	<bean id="priceMessageRepo" class="com.fm.fixconnector.MessageRepo">
+		<property name="senderCompId" value="${PSENDERCOMPID}" />
+		<property name="targetCompId" value="${PTARGETCOMPID}" />
+		<property name="messageVersion" value="${FIXMESSAGETYPE}" />
+	</bean>
+
+	<bean id="tradeMessageRepo" class="com.fm.fixconnector.MessageRepo">
+		<property name="senderCompId" value="${TSENDERCOMPID}" />
+		<property name="targetCompId" value="${TTARGETCOMPID}" />
+		<property name="messageVersion" value="${FIXMESSAGETYPE}" />
+	</bean>
+
+	<bean id="orderListner" class="com.fm.fixconnector.QueueMessageListner"
+		init-method="init">
+		<property name="queue" ref="orderQueue" />
+		<property name="messageController" ref="directController" />
+	</bean>
+
+	<bean id="priceQueue" class="java.util.concurrent.ArrayBlockingQueue">
+		<constructor-arg type="int">
+			<value>200</value>
+		</constructor-arg>
+	</bean>
+
+	<bean id="orderQueue" class="java.util.concurrent.ArrayBlockingQueue">
+		<constructor-arg type="int">
+			<value>10</value>
+		</constructor-arg>
+	</bean>
+
+	<bean id="tradeCaptureQueue" class="java.util.concurrent.ArrayBlockingQueue">
+		<constructor-arg type="int">
+			<value>100</value>
+		</constructor-arg>
+	</bean>
+
+	<!-- quickfix component -->
+	<bean id="quickfix" class="org.apache.camel.component.quickfixj.QuickfixjComponent">
+		<property name="configurations">
+			<util:map>
+				<entry key="incoming" value-ref="quickfixjConfiguration" />
+				<entry key="outgoing" value-ref="quickfixjConfigurationOut" />
+			</util:map>
+		</property>
+		<property name="messageFactory">
+			<bean class="quickfix.fix42.MessageFactory" />
+		</property>
+	</bean>
+
+
+	<bean id="quickfixjConfiguration"
+		class="org.apache.camel.component.quickfixj.QuickfixjConfiguration">
+		<property name="defaultSettings">
+			<util:map>
+				<!-- <entry key="SocketConnectProtocol" value="VM_PIPE" /> <entry key="SocketAcceptProtocol" 
+					value="VM_PIPE" /> -->
+				<entry key="UseDataDictionary" value="N" />
+			</util:map>
+		</property>
+		<property name="sessionSettings">
+			<util:map>
+				<entry key="FIXT.1.1:FIX2D65-P->NORDEA">
+					<util:map>
+						<entry key="ConnectionType" value="initiator" />
+						<entry key="SocketConnectPort" value="${PORT}" />
+						<entry key="SenderCompID" value="${PSENDERCOMPID}" />
+						<entry key="TargetCompID" value="${TTARGETCOMPID}" />
+						<entry key="SocketConnectHost" value="${HOST}" />
+						<entry key="BeginString" value="${FIXMESSAGETYPE}" />
+						<entry key="ResetOnLogon" value="Y" />
+						<entry key="ResetOnLogout" value="Y" />
+						<entry key="DefaultApplVerID" value="FIX.5.0SP2"></entry>
+						<entry key="ResetOnDisconnect" value="Y" />
+						<entry key="HeartBtInt" value="30" />
+						<entry key="FileStorePath" value="C:\quickfix\logs" />
+						<entry key="PersistMessages" value="Y" />
+						<entry key="FileLogPath" value="C:\quickfix\logs\log" />
+					</util:map>
+				</entry>
+			</util:map>
+		</property>
+	</bean>
+	<bean id="quickfixjConfigurationOut"
+		class="org.apache.camel.component.quickfixj.QuickfixjConfiguration">
+		<property name="defaultSettings">
+			<util:map>
+				<!-- <entry key="SocketConnectProtocol" value="VM_PIPE" /> <entry key="SocketAcceptProtocol" 
+					value="VM_PIPE" /> -->
+				<entry key="UseDataDictionary" value="N" />
+			</util:map>
+		</property>
+		<property name="sessionSettings">
+			<util:map>
+				<entry key="FIXT.1.1:${TSENDERCOMPID}->${TTARGETCOMPID}">
+					<util:map>
+						<entry key="ConnectionType" value="initiator" />
+						<entry key="SocketConnectPort" value="${PORT}" />
+						<entry key="SenderCompID" value="${TSENDERCOMPID}" />
+						<entry key="TargetCompID" value="${TTARGETCOMPID}" />
+						<entry key="SocketConnectHost" value="${HOST}" />
+						<entry key="BeginString" value="${FIXMESSAGETYPE}" />
+						<entry key="ResetOnLogon" value="Y" />
+						<entry key="ResetOnLogout" value="Y" />
+						<entry key="DefaultApplVerID" value="FIX.5.0SP2"></entry>
+						<entry key="ResetOnDisconnect" value="Y" />
+						<entry key="HeartBtInt" value="30" />
+						<entry key="FileStorePath" value="C:\quickfix\logs" />
+						<entry key="PersistMessages" value="Y" />
+						<entry key="FileLogPath" value="C:\quickfix\logs\log" />
+					</util:map>
+				</entry>
+			</util:map>
+		</property>
+	</bean>
+
+	<bean id="nordeaAppOrderController" class="com.fm.fixconnector.MessageController"
+		init-method="init">
+		<property name="gatewayUri" value="direct:nordeaorder"></property>
+		<property name="contextUri" value="quickfixjContext"></property>
+	</bean>
+</beans>

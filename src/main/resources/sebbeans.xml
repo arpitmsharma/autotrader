@@ -1,0 +1,318 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camel="http://camel.apache.org/schema/spring"
+	xmlns:util="http://www.springframework.org/schema/util" xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+http://camel.apache.org/schema/spring http://camel.apache.org/schema/spring/camel-spring.xsd
+http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util-2.5.xsd
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+
+	<!-- <context:property-placeholder location="classpath:sebconnection.properties"/> -->
+
+	<camelContext id="quickfixjContextseb" xmlns="http://camel.apache.org/schema/spring">
+		<route>
+			<from uri="quickfixseb:incomingseb" />
+			<choice>
+				<when>
+					<simple>${in.header.EventCategory} == 'SessionLogon'</simple>
+					<log message="Logon Message recevied ::: ${body}" loggingLevel="INFO" />
+                       	<!-- <bean ref="priceFixMessageControllerseb" method="SendQuoteRequestMessage(${ref:BUSD_SEKPriceRequestMapseb})"/> 
+						<bean ref="priceFixMessageControllerseb" method="SendQuoteRequestMessage(${ref:OUSD_SEKPriceRequestMapseb})"/> -->
+					<bean ref="priceFixMessageControllerseb"
+						method="SendQuoteRequestMessage(${ref:BEUR_USDPriceRequestMapseb})" />
+					<bean ref="priceFixMessageControllerseb"
+						method="SendQuoteRequestMessage(${ref:OEUR_USDPriceRequestMapseb})" />
+					<!-- <bean ref="priceFixMessageControllerseb" method="SendQuoteRequestMessage(${ref:BEUR_SEKPriceRequestMapseb})"/> 
+						<bean ref="priceFixMessageControllerseb" method="SendQuoteRequestMessage(${ref:OEUR_SEKPriceRequestMapseb})"/> -->
+				</when>
+				<when>
+					<simple>${in.header.MessageType} == 'S'</simple>
+					<unmarshal ref="bindyDataformat">
+						<bindy type="KeyValue" classType="com.fm.fixconnector.seb.QuoteData"
+							locale="en-us" />
+					</unmarshal>
+					<when>
+						<simple>${body.symbol} == 'EUR/USD'</simple>
+						<log message="Message for Symbol SEB : ${body.symbol}"
+							loggingLevel="INFO" />
+						<bean ref="priceMatcherEURUSD" method="onMessageFromSource2" />
+						<!-- <bean ref="priceMessageConsumerseb" method="consumeMessage"/> -->
+
+					</when>
+				</when>
+			</choice>
+		</route>
+
+		<route id="out">
+			<from uri="quickfixseb:outgoingseb" />
+			<log message="Message on Order route recevied ::: ${body}"
+				loggingLevel="INFO" />
+		</route>
+		<route id="OrderRouteseb">
+			<from uri="direct:seborder" />
+			<bean ref="randomNumberGen" method="assignNo(${ref:orderRequestMapseb})" />
+			<bean ref="tradeMessageReposeb"
+				method="getOrderMessage(${ref:orderRequestMapseb},${in.body})" />
+			<bean ref="tradeFixMessageControllerseb" method="sendMessage" />
+		</route>
+	</camelContext>
+
+
+	<util:map id="OUSD_SEKPriceRequestMapseb" key-type="java.lang.Integer"
+		value-type="java.lang.String">
+		<entry key="1" value="${SEBUSERNMAE}" />
+		<entry key="55" value="USD/SEK" />
+		<entry key="15" value="USD" />
+		<entry key="38" value="1000" />
+		<entry key="269" value="0,1" />
+		<entry key="263" value="1" />
+		<entry key="54" value="1" />
+		<entry key="50" value="SW-VCGtest" />
+		<entry key="57" value="SW-VCGtest" />
+	</util:map>
+	<util:map id="BUSD_SEKPriceRequestMapseb" key-type="java.lang.Integer"
+		value-type="java.lang.String">
+		<entry key="1" value="${SEBUSERNMAE}" />
+		<entry key="55" value="USD/SEK" />
+		<entry key="15" value="SEK" />
+		<entry key="38" value="1000" />
+		<entry key="269" value="0,1" />
+		<entry key="263" value="1" />
+		<entry key="54" value="2" />
+		<entry key="50" value="SW-VCGtest" />
+		<entry key="57" value="SW-VCGtest" />
+	</util:map>
+	<util:map id="OEUR_USDPriceRequestMapseb" key-type="java.lang.Integer"
+		value-type="java.lang.String">
+
+		<entry key="1" value="${SEBUSERNMAE}" />
+		<entry key="55" value="EUR/USD" />
+		<entry key="15" value="EUR" />
+		<entry key="38" value="1000" />
+		<entry key="269" value="0,1" />
+		<entry key="263" value="1" />
+		<entry key="54" value="1" />
+		<entry key="50" value="SW-VCGtest" />
+		<entry key="57" value="SW-VCGtest" />
+	</util:map>
+	<util:map id="BEUR_USDPriceRequestMapseb" key-type="java.lang.Integer"
+		value-type="java.lang.String">
+
+		<entry key="1" value="${SEBUSERNMAE}" />
+		<entry key="55" value="EUR/USD" />
+		<entry key="15" value="EUR" />
+		<entry key="38" value="1000" />
+		<entry key="269" value="0,1" />
+		<entry key="263" value="1" />
+		<entry key="54" value="2" />
+		<entry key="50" value="SW-VCGtest" />
+		<entry key="57" value="SW-VCGtest" />
+	</util:map>
+	<util:map id="OEUR_SEKPriceRequestMapseb" key-type="java.lang.Integer"
+		value-type="java.lang.String">
+		<entry key="1" value="${SEBUSERNMAE}" />
+		<entry key="55" value="EUR/SEK" />
+		<entry key="15" value="SEK" />
+		<entry key="38" value="1000" />
+		<entry key="269" value="0,1" />
+		<entry key="263" value="1" />
+		<entry key="54" value="1" />
+		<entry key="50" value="SW-VCGtest" />
+		<entry key="57" value="SW-VCGtest" />
+	</util:map>
+	<util:map id="BEUR_SEKPriceRequestMapseb" key-type="java.lang.Integer"
+		value-type="java.lang.String">
+		<entry key="1" value="${SEBUSERNMAE}" />
+		<entry key="55" value="EUR/SEK" />
+		<entry key="15" value="SEK" />
+		<entry key="38" value="1000" />
+		<entry key="269" value="0,1" />
+		<entry key="263" value="1" />
+		<entry key="54" value="2" />
+		<entry key="50" value="SW-VCGtest" />
+		<entry key="57" value="SW-VCGtest" />
+	</util:map>
+	<util:map id="orderRequestMapseb" key-type="java.lang.String"
+		value-type="java.lang.String">
+		<entry key="1" value="${SEBUSERNMAE}" />
+		<entry key="21" value="1" />
+		<entry key="57" value="SW-VCGtest" />
+		<entry key="55" value="EUR/SEK" />
+		<entry key="54" value="1" />
+		<entry key="38" value="20" />
+		<entry key="40" value="1" />
+		<entry key="59" value="3" />
+		<entry key="64" value="SPOT" />
+		<entry key="15" value="SEK" />
+	</util:map>
+
+
+	<bean id="priceMessageConsumerseb" class="com.fm.fixconnector.MessageConsumer">
+		<property name="queue" ref="priceQueue" />
+	</bean>
+
+	<bean id="tradeReportConsumerseb" class="com.fm.fixconnector.MessageConsumer">
+		<property name="queue" ref="tradeCaptureQueue" />
+	</bean>
+
+
+	<!-- <bean id="priceMessageSocketServer" class="com.fm.fixconnector.socket.SocketServerHandler" 
+		init-method="init" > <property name="queue" ref="priceQueue"/> <property 
+		name="publisherPort" value="7789"/> </bean> -->
+
+	<bean id="orderMessageSocketServerseb" class="com.fm.fixconnector.socket.SocketServerHandler"
+		init-method="init">
+		<property name="queue" ref="orderQueue" />
+		<property name="publisherPort" value="7795" />
+		<property name="publisherServer" value="false" />
+	</bean>
+
+	<bean id="priceFixMessageControllerseb" class="com.fm.fixconnector.seb.SebFixMessageController"
+		init-method="init">
+		<property name="messageRepo" ref="priceMessageReposeb" />
+		<property name="senderCompId" value="${SEBPSENDERCOMPID}" />
+		<property name="targetCompId" value="${SEBPTARGETCOMPID}" />
+		<property name="messageVersion" value="${SEBFIXMESSAGETYPE}" />
+		<property name="contextUri" value="quickfixjContextseb" />
+		<property name="gatewayUri" value="quickfixseb:incomingseb" />
+	</bean>
+
+	<bean id="tradeFixMessageControllerseb" class="com.fm.fixconnector.seb.SebFixMessageController"
+		init-method="init">
+		<property name="messageRepo" ref="tradeMessageReposeb" />
+		<property name="senderCompId" value="${SEBTSENDERCOMPID}" />
+		<property name="targetCompId" value="${SEBTTARGETCOMPID}" />
+		<property name="messageVersion" value="${SEBFIXMESSAGETYPE}" />
+		<property name="contextUri" value="quickfixjContextseb" />
+		<property name="gatewayUri" value="quickfixseb:outgoingseb" />
+	</bean>
+
+
+	<bean id="directControllerseb" class="com.fm.fixconnector.MessageController"
+		init-method="init">
+		<property name="contextUri" value="quickfixjContextseb"></property>
+		<property name="gatewayUri" value="direct:start"></property>
+	</bean>
+	<bean id="priceMessageReposeb" class="com.fm.fixconnector.seb.SebMessageRepo">
+		<property name="senderCompId" value="${SEBPSENDERCOMPID}" />
+		<property name="targetCompId" value="${SEBPTARGETCOMPID}" />
+		<property name="messageVersion" value="${SEBFIXMESSAGETYPE}" />
+	</bean>
+
+	<bean id="tradeMessageReposeb" class="com.fm.fixconnector.seb.SebMessageRepo">
+		<property name="senderCompId" value="${SEBTSENDERCOMPID}" />
+		<property name="targetCompId" value="${SEBTTARGETCOMPID}" />
+		<property name="messageVersion" value="${SEBFIXMESSAGETYPE}" />
+	</bean>
+
+	<bean id="orderListnerseb" class="com.fm.fixconnector.QueueMessageListner"
+		init-method="init">
+		<property name="queue" ref="orderQueue" />
+		<property name="messageController" ref="directController" />
+	</bean>
+
+	<bean id="priceQueueseb" class="java.util.concurrent.ArrayBlockingQueue">
+		<constructor-arg type="int">
+			<value>200</value>
+		</constructor-arg>
+	</bean>
+
+	<bean id="orderQueueseb" class="java.util.concurrent.ArrayBlockingQueue">
+		<constructor-arg type="int">
+			<value>10</value>
+		</constructor-arg>
+	</bean>
+
+	<bean id="tradeCaptureQueueseb" class="java.util.concurrent.ArrayBlockingQueue">
+		<constructor-arg type="int">
+			<value>100</value>
+		</constructor-arg>
+	</bean>
+
+	<!-- quickfix component -->
+	<bean id="quickfixseb" class="org.apache.camel.component.quickfixj.QuickfixjComponent">
+		<property name="configurations">
+			<util:map>
+				<entry key="incomingseb" value-ref="quickfixjConfigurationseb" />
+				<entry key="outgoingseb" value-ref="quickfixjConfigurationOutseb" />
+			</util:map>
+		</property>
+		<property name="messageFactory">
+			<bean class="quickfix.fix42.MessageFactory" />
+		</property>
+	</bean>
+
+
+	<bean id="quickfixjConfigurationseb"
+		class="org.apache.camel.component.quickfixj.QuickfixjConfiguration">
+		<property name="defaultSettings">
+			<util:map>
+				<!-- <entry key="SocketConnectProtocol" value="VM_PIPE" /> <entry key="SocketAcceptProtocol" 
+					value="VM_PIPE" /> -->
+				<entry key="UseDataDictionary" value="N" />
+			</util:map>
+		</property>
+		<property name="sessionSettings">
+			<util:map>
+				<entry
+					key="${SEBFIXMESSAGETYPE}:${SEBPSENDERCOMPID}/SW-VCGtest->${SEBPTARGETCOMPID}">
+					<util:map>
+						<entry key="ConnectionType" value="initiator" />
+						<entry key="SocketConnectPort" value="${SEBPPORT}" />
+						<entry key="SenderCompID" value="${SEBPSENDERCOMPID}" />
+						<entry key="TargetCompID" value="${SEBPTARGETCOMPID}" />
+						<entry key="SocketConnectHost" value="${SEBPHOST}" />
+						<entry key="BeginString" value="${SEBFIXMESSAGETYPE}" />
+						<entry key="ResetOnLogon" value="Y" />
+						<entry key="ResetOnLogout" value="Y" />
+						<entry key="DefaultApplVerID" value="${SEBFIXMESSAGETYPE}"></entry>
+						<entry key="ResetOnDisconnect" value="Y" />
+						<entry key="HeartBtInt" value="60" />
+						<entry key="FileStorePath" value="C:\quickfix\logs" />
+						<entry key="PersistMessages" value="Y" />
+						<entry key="FileLogPath" value="C:\quickfix\logs\log" />
+					</util:map>
+				</entry>
+			</util:map>
+		</property>
+	</bean>
+	<bean id="quickfixjConfigurationOutseb"
+		class="org.apache.camel.component.quickfixj.QuickfixjConfiguration">
+		<property name="defaultSettings">
+			<util:map>
+				<entry key="UseDataDictionary" value="N" />
+			</util:map>
+		</property>
+		<property name="sessionSettings">
+			<util:map>
+				<entry
+					key="${SEBFIXMESSAGETYPE}:${SEBTSENDERCOMPID}/SW-VCGtest->${SEBTTARGETCOMPID}">
+					<util:map>
+						<entry key="ConnectionType" value="initiator" />
+						<entry key="SocketConnectPort" value="${SEBTPORT}" />
+						<entry key="SenderCompID" value="${SEBTSENDERCOMPID}" />
+						<entry key="TargetCompID" value="${SEBTTARGETCOMPID}" />
+						<entry key="SocketConnectHost" value="${SEBTHOST}" />
+						<entry key="BeginString" value="${SEBFIXMESSAGETYPE}" />
+						<entry key="ResetOnLogon" value="Y" />
+						<entry key="ResetOnLogout" value="Y" />
+						<entry key="DefaultApplVerID" value="${SEBFIXMESSAGETYPE}"></entry>
+						<entry key="ResetOnDisconnect" value="Y" />
+						<entry key="HeartBtInt" value="30" />
+						<entry key="FileStorePath" value="C:\quickfix\logs" />
+						<entry key="PersistMessages" value="Y" />
+						<entry key="FileLogPath" value="C:\quickfix\logs\log" />
+					</util:map>
+				</entry>
+			</util:map>
+		</property>
+	</bean>
+
+	<bean id="sebAppOrderController" class="com.fm.fixconnector.MessageController"
+		init-method="init">
+
+		<property value="direct:seborder" name="gatewayUri"></property>
+		<property name="contextUri" value="quickfixjContextseb"></property>
+	</bean>
+</beans>

@@ -1,0 +1,24 @@
+<html>
+<body>
+<h3>Hi ${user.userName}, welcome to the <a href="http://wishgrab.com/">wishgrab.com</a> !</h3>
+
+We have find resposne on your wishes 
+<table>
+	#foreach ($eligibleItem in $eligibleItems)
+    <tr> <td> $eligibleItem.title </td>  <td> $eligibleItem.Price </td> 
+    <td>
+    #if ($eligibleItem.itemType)
+   $eligibleItem.itemType
+    #end
+    </td>
+    <td>
+    #if ($eligibleItem.location)
+    $eligibleItem.location
+    #end
+    </td>
+     <td><a href="$eligibleItem.href">Click Here</a> </td> </tr>
+    #end
+</table>    
+</body>
+
+</html>
